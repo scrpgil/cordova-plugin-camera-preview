@@ -31,8 +31,6 @@
     BOOL tapToTakePicture = (BOOL)[command.arguments[5] boolValue];
     BOOL dragEnabled = (BOOL)[command.arguments[6] boolValue];
     BOOL toBack = (BOOL)[command.arguments[7] boolValue];
-    CGFloat alpha = (CGFloat)[command.arguments[8] floatValue];
-    BOOL tapToFocus = (BOOL) [command.arguments[9] boolValue];
 
     // Create the session manager
     self.sessionManager = [[CameraSessionManager alloc] init];
@@ -41,10 +39,11 @@
     self.cameraRenderController = [[CameraRenderController alloc] init];
     self.cameraRenderController.dragEnabled = dragEnabled;
     self.cameraRenderController.tapToTakePicture = tapToTakePicture;
-    self.cameraRenderController.tapToFocus = tapToFocus;
     self.cameraRenderController.sessionManager = self.sessionManager;
     self.cameraRenderController.view.frame = CGRectMake(x, y, width, height);
     self.cameraRenderController.delegate = self;
+    self.cameraRenderController.isStop = false;
+
 
     [self.viewController addChildViewController:self.cameraRenderController];
 
@@ -58,23 +57,20 @@
       [self.webView.superview addSubview:self.cameraRenderController.view];
       [self.webView.superview bringSubviewToFront:self.webView];
     } else {
-      self.cameraRenderController.view.alpha = alpha;
+      self.cameraRenderController.view.alpha = (CGFloat)[command.arguments[8] floatValue];
       [self.webView.superview insertSubview:self.cameraRenderController.view aboveSubview:self.webView];
     }
 
     // Setup session
     self.sessionManager.delegate = self.cameraRenderController;
+    [self.sessionManager setupSession:defaultCamera];
 
-    [self.sessionManager setupSession:defaultCamera completion:^(BOOL started) {
-
-      [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
-
-    }];
-
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
   } else {
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Invalid number of parameters"];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
   }
+
+  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
 - (void) stopCamera:(CDVInvokedUrlCommand*)command {
@@ -84,8 +80,9 @@
   if(self.sessionManager != nil) {
     [self.cameraRenderController.view removeFromSuperview];
     [self.cameraRenderController removeFromParentViewController];
-
     self.cameraRenderController = nil;
+
+    [self.sessionManager.session stopRunning];
     self.sessionManager = nil;
 
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
@@ -130,91 +127,10 @@
   CDVPluginResult *pluginResult;
 
   if (self.sessionManager != nil) {
-    [self.sessionManager switchCamera:^(BOOL switched) {
-
-      [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
-
-    }];
-
+    [self.sessionManager switchCamera];
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
   } else {
-
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-  }
-}
-
-- (void) getSupportedFocusModes:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSArray * focusModes = [self.sessionManager getFocusModes];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:focusModes];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getFocusMode:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSString * focusMode = [self.sessionManager getFocusMode];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:focusMode];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) setFocusMode:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  NSString * focusMode = [[command.arguments objectAtIndex:0] stringValue];
-  if (self.sessionManager != nil) {
-    [self.sessionManager setFocusMode:focusMode];
-    NSString * focusMode = [self.sessionManager getFocusMode];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:focusMode ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getSupportedFlashModes:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSArray * flashModes = [self.sessionManager getFlashModes];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:flashModes];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getFlashMode:(CDVInvokedUrlCommand*)command {
-
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSInteger flashMode = [self.sessionManager getFlashMode];
-    NSString * sFlashMode;
-    if (flashMode == 0) {
-      sFlashMode = @"off";
-    } else if (flashMode == 1) {
-      sFlashMode = @"on";
-    } else if (flashMode == 2) {
-      sFlashMode = @"auto";
-    } else {
-      sFlashMode = @"unsupported";
-    }
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:sFlashMode ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera not started"];
   }
 
   [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
@@ -234,13 +150,11 @@
       [self.sessionManager setFlashMode:AVCaptureFlashModeOn];
     } else if ([flashMode isEqual: @"auto"]) {
       [self.sessionManager setFlashMode:AVCaptureFlashModeAuto];
-    } else if ([flashMode isEqual: @"torch"]) {
-      [self.sessionManager setTorchMode];
     } else {
       errMsg = @"Flash Mode not supported";
     }
   } else {
-    errMsg = @"Session not started";
+    errMsg = @"Camera not started";
   }
 
   if (errMsg) {
@@ -257,163 +171,74 @@
   CDVPluginResult *pluginResult;
 
   CGFloat desiredZoomFactor = [[command.arguments objectAtIndex:0] floatValue];
+    
+  // 糞ハックコード：cordovaプラグインの関数の作り方がわからないからzoomの度数で対応
+  if(desiredZoomFactor == 999){
+    // 糞ハックコード：画像停止
+    self.cameraRenderController.isStop = !self.cameraRenderController.isStop;
+  } else if(desiredZoomFactor == 1000){
+    // 糞ハックコード：画像ノーマル
+    self.cameraRenderController.isReverse = false;
+  } else if(desiredZoomFactor == 1001){
+    // 糞ハックコード：画像を反転
+    self.cameraRenderController.isReverse = true;
+  } else if(desiredZoomFactor == 1002){
+    // 糞ハックコード：ホワイトバランスをマイナス
+    NSError *error = nil;
+    // デバイスのロック
+    if ([self.sessionManager.device lockForConfiguration:&error])
+    {
+        // ISO初期値(中間値)でカメラを表示
+        float midISO = self.sessionManager.device.ISO;
 
-  if (self.sessionManager != nil) {
-    [self.sessionManager setZoom:desiredZoomFactor];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
+        midISO = midISO - 100;
+        if(midISO > self.sessionManager.device.activeFormat.maxISO){
+            midISO = self.sessionManager.device.activeFormat.maxISO;
+        }
+        if(midISO < self.sessionManager.device.activeFormat.minISO){
+            midISO = self.sessionManager.device.activeFormat.minISO;
+        }
 
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
+        [self.sessionManager.device setExposureModeCustomWithDuration:AVCaptureExposureDurationCurrent ISO:midISO
+                                                     completionHandler:nil];
+        // デバイスロックの解除
+        [self.sessionManager.device unlockForConfiguration];
+    }else{
+        NSLog(@"%@", error);
 
-- (void) getZoom:(CDVInvokedUrlCommand*)command {
+    }
+  } else if(desiredZoomFactor == 1003){
+    // 糞ハックコード：ホワイトバランスをプラス
+      NSError *error = nil;
+      // デバイスのロック
+      if ([self.sessionManager.device lockForConfiguration:&error])
+      {
+          // ISO初期値(中間値)でカメラを表示
+          float midISO = self.sessionManager.device.ISO;
 
-  CDVPluginResult *pluginResult;
+          midISO = midISO + 100;
+          if(midISO < self.sessionManager.device.activeFormat.minISO){
+             midISO = self.sessionManager.device.activeFormat.minISO;
+          }
+          if(midISO > self.sessionManager.device.activeFormat.maxISO){
+              midISO = self.sessionManager.device.activeFormat.maxISO;
+          }
 
-  if (self.sessionManager != nil) {
-    CGFloat zoom = [self.sessionManager getZoom];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDouble:zoom ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getMaxZoom:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    CGFloat maxZoom = [self.sessionManager getMaxZoom];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDouble:maxZoom ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getExposureModes:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSArray * exposureModes = [self.sessionManager getExposureModes];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:exposureModes];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getExposureMode:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSString * exposureMode = [self.sessionManager getExposureMode];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:exposureMode ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) setExposureMode:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  NSString * exposureMode = [command.arguments objectAtIndex:0];
-  if (self.sessionManager != nil) {
-    [self.sessionManager setExposureMode:exposureMode];
-    NSString * exposureMode = [self.sessionManager getExposureMode];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:exposureMode ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getSupportedWhiteBalanceModes:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSArray * whiteBalanceModes = [self.sessionManager getSupportedWhiteBalanceModes];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:whiteBalanceModes ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getWhiteBalanceMode:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSString * whiteBalanceMode = [self.sessionManager getWhiteBalanceMode];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:whiteBalanceMode ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) setWhiteBalanceMode:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  NSString * whiteBalanceMode = [command.arguments objectAtIndex:0];
-  if (self.sessionManager != nil) {
-    [self.sessionManager setWhiteBalanceMode:whiteBalanceMode];
-    NSString * wbMode = [self.sessionManager getWhiteBalanceMode];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:wbMode ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getExposureCompensationRange:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    NSArray * exposureRange = [self.sessionManager getExposureCompensationRange];
-    NSMutableDictionary *dimensions = [[NSMutableDictionary alloc] init];
-    [dimensions setValue:exposureRange[0] forKey:@"min"];
-    [dimensions setValue:exposureRange[1] forKey:@"max"];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:dimensions];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) getExposureCompensation:(CDVInvokedUrlCommand*)command {
-  CDVPluginResult *pluginResult;
-
-  if (self.sessionManager != nil) {
-    CGFloat exposureCompensation = [self.sessionManager getExposureCompensation];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDouble:exposureCompensation ];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
-  }
-
-  [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-}
-
-- (void) setExposureCompensation:(CDVInvokedUrlCommand*)command {
-  NSLog(@"Zoom");
-  CDVPluginResult *pluginResult;
-
-  CGFloat exposureCompensation = [[command.arguments objectAtIndex:0] floatValue];
-
-  if (self.sessionManager != nil) {
-    [self.sessionManager setExposureCompensation:exposureCompensation];
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDouble:exposureCompensation];
-  } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
+          [self.sessionManager.device setExposureModeCustomWithDuration:AVCaptureExposureDurationCurrent ISO:midISO
+                                                       completionHandler:nil];
+          // デバイスロックの解除
+          [self.sessionManager.device unlockForConfiguration];
+      }else{
+          NSLog(@"%@", error);
+          
+      }
+  }else{
+     if (self.sessionManager != nil) {
+       [self.sessionManager setZoom:desiredZoomFactor];
+       pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+      } else {
+       pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera not not zoomed"];
+     }
   }
 
   [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
@@ -422,14 +247,15 @@
 - (void) takePicture:(CDVInvokedUrlCommand*)command {
   NSLog(@"takePicture");
   CDVPluginResult *pluginResult;
+    
 
   if (self.cameraRenderController != NULL) {
     self.onPictureTakenHandlerId = command.callbackId;
 
     CGFloat width = (CGFloat)[command.arguments[0] floatValue];
     CGFloat height = (CGFloat)[command.arguments[1] floatValue];
-    CGFloat quality = (CGFloat)[command.arguments[2] floatValue] / 100.0f;
-
+    CGFloat quality = (CGFloat)[command.arguments[2] floatValue] / 100;
+    CGFloat pause = quality * 100;
     [self invokeTakePicture:width withHeight:height withQuality:quality];
   } else {
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera not started"];
@@ -475,7 +301,7 @@
       pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Filter not found"];
     }
   } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera not started"];
   }
 
   [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
@@ -486,7 +312,7 @@
     CDVPluginResult *pluginResult;
 
     if (self.sessionManager == nil) {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera did not start!"];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
         return;
     }
@@ -530,13 +356,13 @@
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:jsonFormats];
 
   } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera not started"];
   }
 
   [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
-- (NSString *)getBase64Image:(CGImageRef)imageRef withQuality:(CGFloat) quality {
+- (NSString *)getBase64Image:(CGImageRef)imageRef withQuality:(int) quality {
   NSString *base64Image = nil;
 
   @try {
@@ -562,7 +388,7 @@
     [self.sessionManager tapToFocus:xPoint yPoint:yPoint];
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
   } else {
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Session not started"];
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera not tapped to focus"];
   }
 
   [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
@@ -590,6 +416,7 @@
 }
 
 -(CGImageRef) CGImageRotated:(CGImageRef) originalCGImage withRadians:(double) radians {
+  NSLog(@"tako %f",radians);
   CGSize imageSize = CGSizeMake(CGImageGetWidth(originalCGImage), CGImageGetHeight(originalCGImage));
   CGSize rotatedSize;
   if (radians == M_PI_2 || radians == -M_PI_2) {
@@ -627,34 +454,26 @@
   return rotatedCGImage;
 }
 
-- (void) invokeTapToFocus:(CGPoint)point {
-  [self.sessionManager tapToFocus:point.x yPoint:point.y];
-}
-
 - (void) invokeTakePicture {
-  [self invokeTakePicture:0.0 withHeight:0.0 withQuality:0.85];
+  [self invokeTakePicture:0.0 withHeight:0.0 withQuality:85];
 }
 
-- (void) invokeTakePictureOnFocus {
-    // the sessionManager will call onFocus, as soon as the camera is done with focussing.
-  [self.sessionManager takePictureOnFocus];
-}
-
-- (void) invokeTakePicture:(CGFloat) width withHeight:(CGFloat) height withQuality:(CGFloat) quality{
-    AVCaptureConnection *connection = [self.sessionManager.stillImageOutput connectionWithMediaType:AVMediaTypeVideo];
-    [self.sessionManager.stillImageOutput captureStillImageAsynchronouslyFromConnection:connection completionHandler:^(CMSampleBufferRef sampleBuffer, NSError *error) {
-
+- (void) invokeTakePicture:(CGFloat) width withHeight:(CGFloat) height withQuality:(int) quality{
+    //AVCaptureConnection *connection = [self.sessionManager.stillImageOutput connectionWithMediaType:AVMediaTypeVideo];
+    //[self.sessionManager.stillImageOutput captureStillImageAsynchronouslyFromConnection:connection completionHandler:^(CMSampleBufferRef sampleBuffer, NSError *error) {
+    
       NSLog(@"Done creating still image");
-
-      if (error) {
-        NSLog(@"%@", error);
+      if (0) {
+        //NSLog(@"%@", error);
       } else {
-        NSData *imageData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:sampleBuffer];
-        UIImage *capturedImage  = [[UIImage alloc] initWithData:imageData];
+        //NSData *imageData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:sampleBuffer];
 
+        //NSData *imageData = [self.cameraRenderController.latestFrame JPEGRepresentationOfImage:image];
+        //UIImage *capturedImage  = [[UIImage alloc] initWithData:imageData];
+        //UIImage *capturedImage  = [UIImage imageWithCIImage:self.cameraRenderController.latestFrame];
         CIImage *capturedCImage;
         //image resize
-
+        /*
         if(width > 0 && height > 0){
           CGFloat scaleHeight = width/capturedImage.size.height;
           CGFloat scaleWidth = height/capturedImage.size.width;
@@ -667,7 +486,8 @@
           capturedCImage = [resizeFilter outputImage];
         }else{
           capturedCImage = [[CIImage alloc] initWithCGImage:[capturedImage CGImage]];
-        }
+        }*/
+        capturedCImage = self.cameraRenderController.latestFrame;
 
         CIImage *imageToFilter;
         CIImage *finalCImage;
@@ -696,7 +516,8 @@
         UIImage *resultImage = [UIImage imageWithCGImage:finalImage];
 
         double radians = [self radiansFromUIImageOrientation:resultImage.imageOrientation];
-        CGImageRef resultFinalImage = [self CGImageRotated:finalImage withRadians:radians];
+          double rad = 0;
+          CGImageRef resultFinalImage = [self CGImageRotated:finalImage withRadians:3.14];//withRadians:radians];
 
         CGImageRelease(finalImage); // release CGImageRef to remove memory leaks
 
@@ -710,6 +531,6 @@
         [pluginResult setKeepCallbackAsBool:true];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:self.onPictureTakenHandlerId];
       }
-    }];
+    //}];
 }
 @end
