@@ -82,7 +82,8 @@
     [self.cameraRenderController removeFromParentViewController];
     self.cameraRenderController = nil;
 
-    [self.sessionManager.session stopRunning];
+    //[self.sessionManager.session stopRunning];
+    self.cameraRenderController = nil;
     self.sessionManager = nil;
 
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
