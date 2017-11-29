@@ -82,7 +82,7 @@
     [self.cameraRenderController removeFromParentViewController];
     self.cameraRenderController = nil;
 
-    [self.sessionManager.session stopRunning];
+    self.cameraRenderController = nil;
     self.sessionManager = nil;
 
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
@@ -173,7 +173,7 @@
   CGFloat desiredZoomFactor = [[command.arguments objectAtIndex:0] floatValue];
     
   // 糞ハックコード：cordovaプラグインの関数の作り方がわからないからzoomの度数で対応
-  if(desiredZoomFactor == 999){
+  if(self.cameraRenderController.latestFrame != nil && desiredZoomFactor == 999){
     // 糞ハックコード：画像停止
     self.cameraRenderController.isStop = !self.cameraRenderController.isStop;
   } else if(desiredZoomFactor == 1000){
@@ -249,13 +249,13 @@
   CDVPluginResult *pluginResult;
     
 
-  if (self.cameraRenderController != NULL) {
+  if (self.cameraRenderController.latestFrame != nil && self.cameraRenderController != NULL) {
     self.onPictureTakenHandlerId = command.callbackId;
 
     CGFloat width = (CGFloat)[command.arguments[0] floatValue];
     CGFloat height = (CGFloat)[command.arguments[1] floatValue];
     CGFloat quality = (CGFloat)[command.arguments[2] floatValue] / 100;
-    CGFloat pause = quality * 100;
+    //CGFloat pause = quality * 100;
     [self invokeTakePicture:width withHeight:height withQuality:quality];
   } else {
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera not started"];
